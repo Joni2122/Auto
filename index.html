@@ -2,7 +2,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>3D Auto Stadt Spiel</title>
+  <title>3D Auto Stadt mit Physik</title>
   <style>
     body { margin: 0; overflow: hidden; background: #000; }
     canvas { display: block; }.ui { position: absolute; width: 100%; height: 100%; pointer-events: none; }
@@ -34,141 +34,217 @@
 let scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
-let camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+let camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 2000);
 camera.position.set(0, 6, 10);
 
 let renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// Licht
 scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 let light = new THREE.DirectionalLight(0xffffff, 1);
 light.position.set(10, 20, 10);
 scene.add(light);
 
 // =====================
-// 🌍 STADT / WELT
+// 🌍 WORLD BORDER (unsichtbar)
 // =====================
+let worldSize = 300;
 
-// Boden
+function clampWorld(obj) {
+  if (obj.position.x > worldSize) obj.position.x = worldSize;
+  if (obj.position.x < -worldSize) obj.position.x = -worldSize;
+  if (obj.position.z > worldSize) obj.position.z = worldSize;
+  if (obj.position.z < -worldSize) obj.position.z = -worldSize;
+}
+
+// =====================
+// STRASSEN
+// =====================
 let ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(500, 500),
-  new THREE.MeshStandardMaterial({ color: 0x3cb371 })
+  new THREE.PlaneGeometry(800, 800),
+  new THREE.MeshStandardMaterial({ color: 0x2e8b57 })
 );
 ground.rotation.x = -Math.PI / 2;
 scene.add(ground);
 
-// Straßen (Grid)
 let roadMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
 
-for (let i = -5; i <= 5; i++) {
-  let road1 = new THREE.Mesh(new THREE.PlaneGeometry(500, 8), roadMat);
-  road1.rotation.x = -Math.PI / 2;
-  road1.position.z = i * 40;
-  road1.position.y = 0.01;
-  scene.add(road1);
+for (let i = -6; i <= 6; i++) {
+  let r1 = new THREE.Mesh(new THREE.PlaneGeometry(800, 10), roadMat);
+  r1.rotation.x = -Math.PI / 2;
+  r1.position.z = i * 60;
+  r1.position.y = 0.02;
+  scene.add(r1);
 
-  let road2 = new THREE.Mesh(new THREE.PlaneGeometry(8, 500), roadMat);
-  road2.rotation.x = -Math.PI / 2;
-  road2.position.x = i * 40;
-  road2.position.y = 0.01;
-  scene.add(road2);
-}
-
-// Gebäude
-let buildings = [];
-for (let i = 0; i < 120; i++) {
-  let h = Math.random() * 8 + 2;
-  let b = new THREE.Mesh(
-    new THREE.BoxGeometry(6, h, 6),
-    new THREE.MeshStandardMaterial({ color: 0x888888 })
-  );
-
-  let x = (Math.floor(Math.random() * 10) - 5) * 40 + (Math.random() * 10);
-  let z = (Math.floor(Math.random() * 10) - 5) * 40 + (Math.random() * 10);
-
-  b.position.set(x, h / 2, z);
-  scene.add(b);
-  buildings.push(b);
+  let r2 = new THREE.Mesh(new THREE.PlaneGeometry(10, 800), roadMat);
+  r2.rotation.x = -Math.PI / 2;
+  r2.position.x = i * 60;
+  r2.position.y = 0.02;
+  scene.add(r2);
 }
 
 // =====================
-// 🚗 AUTO (besseres Design)
+// GEBÄUDE (mit Fenstern)
+// =====================
+let buildings = [];
+
+function makeBuilding(x,z) {
+  let h = 5 + Math.random() * 20;
+
+  let body = new THREE.Mesh(
+    new THREE.BoxGeometry(8, h, 8),
+    new THREE.MeshStandardMaterial({ color: 0x888888 })
+  );
+
+  body.position.set(x, h/2, z);
+
+  // Fenster (kleine Emissionen)
+  let winMat = new THREE.MeshStandardMaterial({ color: 0xffffaa, emissive: 0xffffaa, emissiveIntensity: 0.2 });
+
+  for (let i = 0; i < 6; i++) {
+    let w = new THREE.Mesh(new THREE.PlaneGeometry(1,1), winMat);
+    w.position.set(x + (Math.random()-0.5)*6, Math.random()*h, z + 4.01);
+    scene.add(w);
+  }
+
+  scene.add(body);
+  buildings.push(body);
+}
+
+for (let i = 0; i < 80; i++) {
+  let x = (Math.random()-0.5)*500;
+  let z = (Math.random()-0.5)*500;
+  makeBuilding(x,z);
+}
+
+// =====================
+// OBJEKTE (Bäume, Schilder, Ampeln)
+// =====================
+let objects = [];
+
+function addTree(x,z){
+  let trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.5,0.5,3),
+    new THREE.MeshStandardMaterial({ color: 0x8b5a2b })
+  );
+
+  let top = new THREE.Mesh(
+    new THREE.SphereGeometry(2),
+    new THREE.MeshStandardMaterial({ color: 0x228b22 })
+  );
+
+  trunk.position.set(x,1.5,z);
+  top.position.set(x,4,z);
+
+  scene.add(trunk);
+  scene.add(top);
+
+  objects.push(trunk);
+  objects.push(top);
+}
+
+function addSign(x,z){
+  let pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.1,0.1,3),
+    new THREE.MeshStandardMaterial({ color: 0xaaaaaa })
+  );
+
+  pole.position.set(x,1.5,z);
+  scene.add(pole);
+  objects.push(pole);
+}
+
+for (let i=0;i<50;i++) addTree((Math.random()-0.5)*500,(Math.random()-0.5)*500);
+for (let i=0;i<30;i++) addSign((Math.random()-0.5)*500,(Math.random()-0.5)*500);
+
+// =====================
+// AUTO
 // =====================
 let car = new THREE.Group();
 
 let base = new THREE.Mesh(
-  new THREE.BoxGeometry(1.5, 0.5, 3),
+  new THREE.BoxGeometry(2,0.6,4),
   new THREE.MeshStandardMaterial({ color: 0xff0000 })
 );
-base.position.y = 0.5;
-car.add(base);
 
 let cabin = new THREE.Mesh(
-  new THREE.BoxGeometry(1, 0.5, 1.2),
+  new THREE.BoxGeometry(1.5,0.6,2),
   new THREE.MeshStandardMaterial({ color: 0xaa0000 })
 );
-cabin.position.set(0, 0.9, -0.2);
-car.add(cabin);
 
+cabin.position.y = 0.8;
+car.add(base);
+car.add(cabin);
 car.position.y = 0;
 scene.add(car);
 
 // =====================
 // CONTROLS
 // =====================
-let controls = { left:false, right:false, gas:false, brake:false };
+let controls = { left:false,right:false,gas:false,brake:false };
 
-document.getElementById("left").onpointerdown = () => controls.left = true;
-document.getElementById("left").onpointerup = () => controls.left = false;
-
-document.getElementById("right").onpointerdown = () => controls.right = true;
-document.getElementById("right").onpointerup = () => controls.right = false;
-
-document.getElementById("gas").onpointerdown = () => controls.gas = true;
-document.getElementById("gas").onpointerup = () => controls.gas = false;
-
-document.getElementById("brake").onpointerdown = () => controls.brake = true;
-document.getElementById("brake").onpointerup = () => controls.brake = false;
+left.onpointerdown=()=>controls.left=true;
+left.onpointerup=()=>controls.left=false;
+right.onpointerdown=()=>controls.right=true;
+right.onpointerup=()=>controls.right=false;
+gas.onpointerdown=()=>controls.gas=true;
+gas.onpointerup=()=>controls.gas=false;
+brake.onpointerdown=()=>controls.brake=true;
+brake.onpointerup=()=>controls.brake=false;
 
 // =====================
-// PHYSIK
+// PHYSIK + KOLLISION
 // =====================
-let speed = 0;
-let rot = 0;
+let speed=0,rot=0;
 
-function animate() {
+function collide(list){
+  for(let o of list){
+    let dx=car.position.x-o.position.x;
+    let dz=car.position.z-o.position.z;
+    if(Math.sqrt(dx*dx+dz*dz)<2){
+      speed*=-0.3;
+      car.position.x+=dx*0.1;
+      car.position.z+=dz*0.1;
+    }
+  }
+}
+
+function animate(){
   requestAnimationFrame(animate);
 
-  if (controls.gas) speed += 0.003;
-  else speed *= 0.98;
+  if(controls.gas)speed+=0.004;
+  else speed*=0.98;
 
-  if (controls.brake) speed *= 0.9;
+  if(controls.brake)speed*=0.9;
 
-  if (controls.left) rot += 0.04;
-  if (controls.right) rot -= 0.04;
+  if(controls.left)rot+=0.04;
+  if(controls.right)rot-=0.04;
 
-  car.rotation.y = rot;
+  car.rotation.y=rot;
 
-  car.position.x -= Math.sin(rot) * speed;
-  car.position.z -= Math.cos(rot) * speed;
+  car.position.x-=Math.sin(rot)*speed;
+  car.position.z-=Math.cos(rot)*speed;
 
-  // Kamera folgt Auto
-  camera.position.x = car.position.x + Math.sin(rot) * 8;
-  camera.position.z = car.position.z + Math.cos(rot) * 8;
-  camera.position.y = 5;
+  collide(objects);
+  collide(buildings);
+
+  clampWorld(car);
+
+  camera.position.x=car.position.x+Math.sin(rot)*8;
+  camera.position.z=car.position.z+Math.cos(rot)*8;
+  camera.position.y=6;
   camera.lookAt(car.position);
 
-  renderer.render(scene, camera);
+  renderer.render(scene,camera);
 }
 
 animate();
 
-window.addEventListener("resize", () => {
-  camera.aspect = window.innerWidth/window.innerHeight;
+window.addEventListener("resize",()=>{
+  camera.aspect=innerWidth/innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(innerWidth,innerHeight);
 });
 
 </script></body>
