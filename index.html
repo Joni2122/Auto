@@ -2,20 +2,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>3D Auto Spiel</title>
+  <title>3D Auto Chaos Spiel</title>
   <style>
     body { margin: 0; overflow: hidden; background: #000; }
-    canvas { display: block; }.ui {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
+    canvas { display: block; }.ui { position: absolute; width: 100%; height: 100%; pointer-events: none; }
 
 .btn {
   position: absolute;
-  padding: 15px 20px;
-  border-radius: 15px;
+  padding: 14px 18px;
+  border-radius: 14px;
   border: none;
   color: white;
   font-size: 16px;
@@ -25,14 +20,14 @@
 
 #left { bottom: 20px; left: 20px; background: #444; }
 #right { bottom: 20px; left: 110px; background: #444; }
-#gas { bottom: 20px; right: 20px; background: green; }
-#brake { bottom: 20px; right: 120px; background: red; }
+#gas { bottom: 20px; right: 20px; background: #1db954; }
+#brake { bottom: 20px; right: 120px; background: #e74c3c; }
 
   </style>
 </head>
 <body><div class="ui">
-  <button id="left" class="btn">⬅️ Links</button>
-  <button id="right" class="btn">➡️ Rechts</button>
+  <button id="left" class="btn">⬅️</button>
+  <button id="right" class="btn">➡️</button>
   <button id="gas" class="btn">Gas</button>
   <button id="brake" class="btn">Bremse</button>
 </div><script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script><script>
@@ -46,25 +41,50 @@ let renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// Boden
-let groundGeo = new THREE.PlaneGeometry(200, 200);
-let groundMat = new THREE.MeshStandardMaterial({ color: 0x2ecc71 });
-let ground = new THREE.Mesh(groundGeo, groundMat);
-ground.rotation.x = -Math.PI / 2;
-scene.add(ground);
-
 // Licht
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 let light = new THREE.DirectionalLight(0xffffff, 1);
 light.position.set(5, 10, 5);
 scene.add(light);
-scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
-// Auto (einfacher Würfel)
-let carGeo = new THREE.BoxGeometry(1, 0.5, 2);
-let carMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-let car = new THREE.Mesh(carGeo, carMat);
+// Boden
+let ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(300, 300),
+  new THREE.MeshStandardMaterial({ color: 0x2ecc71 })
+);
+ground.rotation.x = -Math.PI / 2;
+scene.add(ground);
+
+// Auto
+let car = new THREE.Mesh(
+  new THREE.BoxGeometry(1, 0.5, 2),
+  new THREE.MeshStandardMaterial({ color: 0xff0000 })
+);
 car.position.y = 0.5;
 scene.add(car);
+
+// Zerstörbare Objekte
+let objects = [];
+
+function spawnBoxes() {
+  for (let i = 0; i < 40; i++) {
+    let box = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshStandardMaterial({ color: 0x8e44ad })
+    );
+
+    box.position.set(
+      (Math.random() - 0.5) * 200,
+      0.5,
+      (Math.random() - 0.5) * 200
+    );
+
+    scene.add(box);
+    objects.push(box);
+  }
+}
+
+spawnBoxes();
 
 // Controls
 let controls = { left:false, right:false, gas:false, brake:false };
@@ -82,7 +102,22 @@ document.getElementById("brake").onpointerdown = () => controls.brake = true;
 document.getElementById("brake").onpointerup = () => controls.brake = false;
 
 let speed = 0;
-let rotation = 0;
+let rot = 0;
+
+function checkCollision() {
+  for (let i = objects.length - 1; i >= 0; i--) {
+    let o = objects[i];
+    let dx = car.position.x - o.position.x;
+    let dz = car.position.z - o.position.z;
+    let dist = Math.sqrt(dx*dx + dz*dz);
+
+    if (dist < 1.5) {
+      scene.remove(o);
+      objects.splice(i, 1);
+      speed *= 0.5;
+    }
+  }
+}
 
 function animate() {
   requestAnimationFrame(animate);
@@ -92,16 +127,19 @@ function animate() {
 
   if (controls.brake) speed *= 0.9;
 
-  if (controls.left) rotation += 0.03;
-  if (controls.right) rotation -= 0.03;
+  if (controls.left) rot += 0.03;
+  if (controls.right) rot -= 0.03;
 
-  car.rotation.y = rotation;
+  car.rotation.y = rot;
 
-  car.position.x -= Math.sin(rotation) * speed;
-  car.position.z -= Math.cos(rotation) * speed;
+  car.position.x -= Math.sin(rot) * speed;
+  car.position.z -= Math.cos(rot) * speed;
 
-  camera.position.x = car.position.x + Math.sin(rotation) * 5;
-  camera.position.z = car.position.z + Math.cos(rotation) * 5;
+  checkCollision();
+
+  camera.position.x = car.position.x + Math.sin(rot) * 6;
+  camera.position.z = car.position.z + Math.cos(rot) * 6;
+  camera.position.y = 4;
   camera.lookAt(car.position);
 
   renderer.render(scene, camera);
